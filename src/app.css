@@ -1,0 +1,25 @@
+/* Fichier: src/app.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --accent-color: #5865F2;
+  --bg-from: #121212;
+  --bg-to: #0a0a0a;
+  --card-bg: #1e1e1e;
+  --text-primary: #f3f4f6;
+}
+
+body {
+  background: linear-gradient(to bottom, var(--bg-from), var(--bg-to));
+  color: var(--text-primary);
+  font-family: 'Segoe UI', sans-serif;
+  overflow: hidden;
+  margin: 0;
+}
+
+/* Scrollbar stylisée */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+::-webkit-scrollbar-thumb { background: var(--accent-color); border-radius: 10px; }

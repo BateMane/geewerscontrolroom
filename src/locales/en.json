@@ -1,0 +1,14 @@
+{
+  "nav": { "dashboard": "Dashboard", "specs": "My PC", "settings": "Settings" },
+  "dash": { "cpu_load": "CPU Load", "ram_usage": "RAM Usage", "swap": "Swap Memory" },
+  "specs": { "title": "System Specifications", "os": "Operating System", "cpu": "Processor", "cores": "Cores", "ram": "Total Memory", "hostname": "PC Name" },
+  "settings": { 
+    "title": "Settings", 
+    "appearance": "Appearance", 
+    "about": "About",
+    "theme_presets": "Theme Presets",
+    "bug_report": "Report a Bug / Suggestion",
+    "coffee": "Buy me a coffee",
+    "version": "Version 1.0.0"
+  }
+}

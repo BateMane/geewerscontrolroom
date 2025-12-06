@@ -1,0 +1,14 @@
+{
+  "nav": { "dashboard": "Tableau de Bord", "specs": "Mon PC", "settings": "Paramètres" },
+  "dash": { "cpu_load": "Charge CPU", "ram_usage": "Utilisation RAM", "swap": "Mémoire Swap" },
+  "specs": { "title": "Spécifications Système", "os": "Système d'Exploitation", "cpu": "Processeur", "cores": "Cœurs", "ram": "Mémoire Totale", "hostname": "Nom du PC" },
+  "settings": { 
+    "title": "Paramètres", 
+    "appearance": "Apparence", 
+    "about": "À Propos",
+    "theme_presets": "Thèmes Prédéfinis",
+    "bug_report": "Signaler un Bug / Suggestion",
+    "coffee": "Offrez-moi un café",
+    "version": "Version 1.0.0"
+  }
+}
