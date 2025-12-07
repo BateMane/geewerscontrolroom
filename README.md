@@ -1,4 +1,4 @@
-# Geewer's Control Room 1.0.0.4
+# Geewer's Control Room 1.0.4
 
 ![Version](https://img.shields.io/badge/version-1.0.4-blue?style=flat-square)
 ![Tauri](https://img.shields.io/badge/Tauri-2.0-orange?style=flat-square&logo=tauri)
