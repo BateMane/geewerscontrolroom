@@ -1,79 +1,102 @@
-<div align="center">
-  <img src="static/icon.png" alt="Logo" width="100" height="100" />
-  <h1>Geewer's Control Room</h1>
-  <p>
-    <strong>Ta station de contrôle ultime pour PC. / Your ultimate PC control station.</strong>
-  </p>
-  
-  <img src="screenshot.png" alt="Dashboard Preview" width="100%" />
-</div>
+# Geewer's Control Room
 
-<br />
+![Version](https://img.shields.io/badge/version-1.0.4-blue?style=flat-square)
+![Tauri](https://img.shields.io/badge/Tauri-2.0-orange?style=flat-square&logo=tauri)
+![Svelte](https://img.shields.io/badge/Svelte-red?style=flat-square&logo=svelte)
+![Platform](https://img.shields.io/badge/platform-Windows-blueviolet?style=flat-square&logo=windows)
+
+Salut ! **Geewer's Control Room**, c'est ta station de contrôle ultime pour garder un œil sur ton PC.
+
+J'en avais marre du Gestionnaire des tâches moche ou des logiciels usine à gaz pour voir si mon PC chauffait. J'ai créé cette app pour avoir un dashboard stylé, fluide et précis. Elle surveille tes composants, teste tes performances et te donne les infos essentielles en un clin d'œil.
+
+C'est léger, ça ne bouffe pas tes FPS, et c'est codé avec **Tauri (Rust)** pour une rapidité maximale.
+
+<img width="100%" alt="interface" src="preview.png" />
 
 ---
 
-## 🇫🇷 Français
+## 🇫🇷 Fonctionnalités
 
-Salut ! Bienvenue sur le repo de **Geewer's Control Room**.
+L'idée est de rassembler tout ce qu'il faut savoir sur ta machine au même endroit :
 
-C'est un petit outil puissant (mais léger !) que j'ai développé pour garder un œil sur mon PC sans me prendre la tête. Fini les gestionnaires de tâches moches, place à une interface Cyberpunk/Gamer fluide et réactive.
+* **Tableau de Bord Temps Réel** : Surveille la charge CPU, l'utilisation de la RAM, le Swap et surtout ton débit réseau actuel (Upload/Download) à la seconde près.
+* **Santé du PC** : Une note globale sur 100 calculée en direct pour savoir si ton système est en souffrance.
+* **Outils Intégrés** :
+    * 🚀 **Dernières Activités** : Vois quelles applications tu as lancées récemment.
+    * 🧪 **Benchmark CPU** : Teste la puissance brute de ton processeur avec un calcul intensif.
+    * 🌐 **Test Latence** : Un ping rapide vers Google pour vérifier si ta connexion lag.
+* **Specs Détaillées** : Détection intelligente de ta "vraie" carte graphique (ignore les drivers virtuels), liste de tes disques avec barres d'espace, et tri de tes périphériques (Écrans, Audio, Claviers...).
+* **C'est ton interface** : Change la couleur d'accentuation, le fond des cartes et le thème global pour matcher ton setup.
 
-### 🚀 Ce que ça fait
-* **Tableau de bord en temps réel :** Surveille ton CPU, ta RAM, ton Swap et ton débit Réseau (Upload/Download) à la seconde près.
-* **Santé du PC :** Une note globale sur 100 pour savoir si ton PC souffre.
-* **Outils intégrés :**
-    * 🧪 **Benchmark CPU :** Teste la puissance brute de ton processeur.
-    * 🌐 **Test Latence :** Un ping rapide vers Google pour vérifier ta connexion.
-    * 🔄 **Activités Récentes :** Liste les dernières applications que tu as ouvertes.
-* **Infos Détaillées :** Tout sur tes disques, ta carte graphique (détection intelligente), tes écrans et tes périphériques USB.
-* **Customisation :** Change les couleurs, le thème, tout est sauvegardé !
+---
 
-### 🛠️ Comment l'installer (Dev)
-Si tu veux bidouiller le code, c'est du **Tauri (Rust)** avec **Svelte** :
+## 🛠️ Comment l'installer ou le tester ?
 
-1.  Clone le projet.
-2.  Installe les dépendances :
+Si tu veux tester le projet ou modifier le code, c'est assez simple. Il te faut juste **Node.js** et **Rust** installés sur ta machine.
+
+1.  **Récupère le projet**
+    ```bash
+    git clone [https://github.com/BateMane/geewerscontrolroom.git](https://github.com/BateMane/geewerscontrolroom.git)
+    cd geewer-hw-monitor
+    ```
+
+2.  **Installe ce qu'il faut**
     ```bash
     npm install
     ```
-3.  Lance le mode dév :
+
+3.  **Lance l'app**
     ```bash
     npm run tauri dev
     ```
 
+Et voilà, la salle de contrôle est ouverte !
+
 ---
 
-## 🇬🇧 English
+## 💻 C'est fait comment ?
 
-Hi there! Welcome to the **Geewer's Control Room** repo.
+Pour les curieux, voici la stack technique :
+* **Frontend** : Svelte + Tailwind CSS (pour le design Cyberpunk fluide).
+* **Backend** : Rust via Tauri (pour les performances et l'accès bas niveau au matériel via `sysinfo` et `PowerShell`).
 
-This is a powerful (yet lightweight!) tool I built to keep an eye on my PC stats without the headache. No more ugly task managers, say hello to a smooth, Cyberpunk/Gamer interface.
+Si tu as des idées pour améliorer le tool ou si tu trouves un bug, n'hésite pas à ouvrir une *Issue* ou à utiliser le bouton de feedback directement dans les paramètres de l'app !
 
-### 🚀 Features
-* **Real-time Dashboard:** Monitor CPU, RAM, Swap, and Network speed (Up/Down) live.
-* **System Health:** A global score out of 100 to know if your PC is struggling.
+---
+
+<br>
+
+# 🇬🇧 English Description
+
+**Geewer's Control Room** is your ultimate dashboard to monitor your PC stats with style.
+
+Tired of the ugly Task Manager? This app provides a sleek, Cyberpunk-inspired interface to monitor your hardware in real-time without eating up your resources.
+
+### ⚡ What can it do?
+
+* **Real-time Dashboard:** Monitor CPU, RAM, Swap, and Network bandwidth (Up/Down) live.
+* **System Health:** A live global score out of 100 based on system load.
 * **Built-in Tools:**
+    * 🚀 **Recent Activities:** Tracks recently opened applications.
     * 🧪 **CPU Benchmark:** Test your processor's raw power.
-    * 🌐 **Latency Test:** Quick ping test to check your connection.
-    * 🔄 **Recent Activities:** See which apps you launched recently.
-* **Detailed Specs:** Everything about your drives, GPU (smart detection), monitors, and USB peripherals.
-* **Customization:** Change colors, themes, everything is saved!
+    * 🌐 **Latency Test:** Quick ping to check your internet stability.
+* **Advanced Specs:** Smart GPU detection, Drive storage visualization, and organized Peripheral list (Monitors, Audio, Inputs...).
+* **Customization:** Fully themeable interface.
 
-### 🛠️ How to run it (Dev)
-If you want to tinker with the code, it's built with **Tauri (Rust)** and **Svelte**:
+### 🛠️ Installation
 
-1.  Clone the project.
-2.  Install dependencies:
+1.  **Clone the repo**
+    ```bash
+    git clone [https://github.com/BateMane/geewerscontrolroom.git](https://github.com/BateMane/geewerscontrolroom.git)
+    cd geewer-hw-monitor
+    ```
+
+2.  **Install dependencies**
     ```bash
     npm install
     ```
-3.  Run dev mode:
+
+3.  **Run it**
     ```bash
     npm run tauri dev
     ```
-
----
-
-<div align="center">
-  Made with ❤️ by <strong>Geewer</strong>
-</div>
