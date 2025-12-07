@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "geewers-control-room",
+  "productName": "Geewer's Control Room",
   "version": "0.1.0",
   "identifier": "com.sid9rs.geewers-control-room",
   "build": {

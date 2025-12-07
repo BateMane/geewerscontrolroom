@@ -1,9 +1,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use sysinfo::{Disks, Networks, System};
-use tauri::{Emitter, Manager}; 
+use tauri::{Emitter, Manager};
 use std::{thread, time::{Duration, Instant}, net::TcpStream, process::Command};
 use serde::Serialize;
+// IMPORT CRUCIAL POUR WINDOWS
+use std::os::windows::process::CommandExt;
+
+// --- CONSTANTES ---
+// Flag Windows pour ne pas créer de fenêtre console
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 // --- STRUCTURES DE DONNÉES ---
 
@@ -53,7 +59,9 @@ struct AppEntry {
 // --- FONCTIONS UTILITAIRES ---
 
 fn get_gpu_name() -> String {
+    // AJOUT DU FLAG ICI
     let output = Command::new("wmic")
+        .creation_flags(CREATE_NO_WINDOW)
         .args(&["path", "win32_videocontroller", "get", "name"])
         .output();
 
@@ -69,12 +77,10 @@ fn get_gpu_name() -> String {
 
                 let name_upper = name.to_uppercase();
 
-                // On ignore les drivers virtuels ou de streaming
                 if name_upper.contains("VIRTUAL") || name_upper.contains("PARSEC") || name_upper.contains("CITRIX") || name_upper.contains("REMOTE") || name_upper.contains("RDP") {
                     continue;
                 }
 
-                // Priorité aux GPU dédiés
                 if name_upper.contains("NVIDIA") || name_upper.contains("AMD") || name_upper.contains("RTX") || name_upper.contains("GTX") || name_upper.contains("RADEON") {
                     best_gpu = name.to_string();
                     found_dedicated = true;
@@ -94,10 +100,11 @@ fn get_gpu_name() -> String {
 fn get_connected_peripherals() -> Vec<Peripheral> {
     let mut periphs = Vec::new();
     
-    // On scanne large pour ensuite trier dans l'interface
     let script = "Get-PnpDevice -Class 'Monitor','AudioEndpoint','Keyboard','PointingDevice','Camera' -Status 'OK' | Select-Object FriendlyName, Class";
     
+    // AJOUT DU FLAG ICI
     let output = Command::new("powershell")
+        .creation_flags(CREATE_NO_WINDOW)
         .args(&["-NoProfile", "-Command", script])
         .output();
 
@@ -110,13 +117,11 @@ fn get_connected_peripherals() -> Vec<Peripheral> {
                 let name = parts[..parts.len()-1].join(" ");
                 
                 let n_low = name.to_lowercase();
-                // Filtre pour enlever le bruit système inutile
                 if !name.is_empty() 
                    && !n_low.contains("composite") 
                    && !n_low.contains("root hub") 
                    && !n_low.contains("print") 
-                   && !n_low.contains("virtual") 
-                   && !n_low.contains("volume") { // Ajout du filtre volume qui est souvent redondant
+                   && !n_low.contains("virtual") {
                     periphs.push(Peripheral { name, kind });
                 }
             }
@@ -159,25 +164,22 @@ fn get_static_specs() -> PcSpecs {
 async fn run_benchmark() -> u64 {
     let start = Instant::now();
     let mut count = 0;
-    // Charge CPU artificielle pour le test
-    for i in 2..250_000 { // Légèrement augmenté pour plus de précision
+    for i in 2..200_000 {
         let mut is_prime = true;
-        let limit = (i as f64).sqrt() as i32 + 1;
-        for j in 2..limit {
+        for j in 2..((i as f64).sqrt() as i32 + 1) {
             if i % j == 0 { is_prime = false; break; }
         }
         if is_prime { count += 1; }
     }
     let duration = start.elapsed();
     let ms = duration.as_millis() as u64;
-    if ms == 0 { return 0; }
-    15_000_000 / ms
+    if ms == 0 { return 10000; }
+    10_000_000 / ms
 }
 
 #[tauri::command]
 async fn test_connection() -> String {
     let start = Instant::now();
-    // Ping TCP rapide vers Google DNS
     match TcpStream::connect_timeout(&"8.8.8.8:53".parse().unwrap(), Duration::from_secs(2)) {
         Ok(_) => format!("{} ms", start.elapsed().as_millis()),
         Err(_) => "Offline".to_string(),
@@ -186,9 +188,14 @@ async fn test_connection() -> String {
 
 #[tauri::command]
 async fn get_recent_apps() -> Vec<AppEntry> {
-    // Récupère les processus avec fenêtre, triés par heure de lancement
     let script = "Get-Process | Where-Object {$_.MainWindowTitle -ne \"\"} | Sort-Object StartTime -Descending | Select-Object -First 5 -ExpandProperty MainWindowTitle";
-    let output = Command::new("powershell").args(&["-NoProfile", "-Command", script]).output();
+    
+    // AJOUT DU FLAG ICI AUSSI
+    let output = Command::new("powershell")
+        .creation_flags(CREATE_NO_WINDOW)
+        .args(&["-NoProfile", "-Command", script])
+        .output();
+
     let mut apps = Vec::new();
     if let Ok(o) = output {
         let txt = String::from_utf8_lossy(&o.stdout);
@@ -204,14 +211,12 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            // Maximiser au lancement
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.maximize();
             }
 
             let app_handle = app.handle().clone();
             
-            // Thread de surveillance système
             thread::spawn(move || {
                 let mut sys = System::new_all();
                 let mut networks = Networks::new_with_refreshed_list();
