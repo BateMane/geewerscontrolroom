@@ -11,7 +11,7 @@ J'en avais marre du Gestionnaire des tâches moche ou des logiciels usine à gaz
 
 C'est léger, ça ne bouffe pas tes FPS, et c'est codé avec **Tauri (Rust)** pour une rapidité maximale.
 
-<img width="100%" alt="interface" src="preview.png" />
+<img width="100%" alt="interface" src="screenshot.png" />
 
 ---
 
@@ -22,7 +22,7 @@ L'idée est de rassembler tout ce qu'il faut savoir sur ta machine au même endr
 * **Tableau de Bord Temps Réel** : Surveille la charge CPU, l'utilisation de la RAM, le Swap et surtout ton débit réseau actuel (Upload/Download) à la seconde près.
 * **Santé du PC** : Une note globale sur 100 calculée en direct pour savoir si ton système est en souffrance.
 * **Outils Intégrés** :
-    * 🚀 **Dernières Activités** : Vois quelles applications tu as lancées récemment.
+    * 🚀 **Dernières Activités** : Vois quelles applications tu as lancées récemment (avec icônes intelligentes).
     * 🧪 **Benchmark CPU** : Teste la puissance brute de ton processeur avec un calcul intensif.
     * 🌐 **Test Latence** : Un ping rapide vers Google pour vérifier si ta connexion lag.
 * **Specs Détaillées** : Détection intelligente de ta "vraie" carte graphique (ignore les drivers virtuels), liste de tes disques avec barres d'espace, et tri de tes périphériques (Écrans, Audio, Claviers...).
@@ -77,7 +77,7 @@ Tired of the ugly Task Manager? This app provides a sleek, Cyberpunk-inspired in
 * **Real-time Dashboard:** Monitor CPU, RAM, Swap, and Network bandwidth (Up/Down) live.
 * **System Health:** A live global score out of 100 based on system load.
 * **Built-in Tools:**
-    * 🚀 **Recent Activities:** Tracks recently opened applications.
+    * 🚀 **Recent Activities:** Tracks recently opened applications (with smart icons).
     * 🧪 **CPU Benchmark:** Test your processor's raw power.
     * 🌐 **Latency Test:** Quick ping to check your internet stability.
 * **Advanced Specs:** Smart GPU detection, Drive storage visualization, and organized Peripheral list (Monitors, Audio, Inputs...).
