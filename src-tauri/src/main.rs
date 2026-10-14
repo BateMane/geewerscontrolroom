@@ -1,210 +1,433 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use sysinfo::{Disks, Networks, System};
-use tauri::{Emitter, Manager};
-use std::{thread, time::{Duration, Instant}, net::TcpStream, process::Command};
 use serde::Serialize;
-// IMPORT CRUCIAL POUR WINDOWS
 use std::os::windows::process::CommandExt;
+use std::{
+    net::TcpStream,
+    process::Command,
+    thread,
+    time::{Duration, Instant},
+};
+use sysinfo::{Disks, Networks, Pid, System};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, Manager,
+};
 
-// --- CONSTANTES ---
 // Flag Windows pour ne pas créer de fenêtre console
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+const TOP_PROCESSES: usize = 60;
 
 // --- STRUCTURES DE DONNÉES ---
 
 #[derive(Serialize, Clone)]
 struct DiskInfo {
     name: String,
+    mount: String,
     total_space: u64,
     available_space: u64,
     kind: String,
-}
-
-#[derive(Serialize, Clone)]
-struct Peripheral {
-    name: String,
-    kind: String, 
+    fs: String,
 }
 
 #[derive(Serialize, Clone)]
 struct PcSpecs {
     os: String,
+    kernel: String,
     host_name: String,
     cpu_brand: String,
+    cpu_arch: String,
     cpu_cores: usize,
+    cpu_threads: usize,
+    cpu_freq: u64,
     total_memory: u64,
-    gpu_name: String,
     disks: Vec<DiskInfo>,
-    peripherals: Vec<Peripheral>,
+    // GPU, carte mère, BIOS, barrettes RAM, périphériques (JSON brut de PowerShell/CIM)
+    hardware: serde_json::Value,
+}
+
+#[derive(Serialize, Clone)]
+struct ProcInfo {
+    pid: u32,
+    name: String,
+    cpu: f32,
+    memory: u64,
 }
 
 #[derive(Serialize, Clone)]
 struct RealTimeData {
     cpu_usage: f32,
+    cpu_cores: Vec<f32>,
+    cpu_freq: u64,
     ram_used: u64,
     ram_total: u64,
     swap_used: u64,
+    swap_total: u64,
     net_down: u64,
     net_up: u64,
+    net_total_down: u64,
+    net_total_up: u64,
+    disk_read: u64,
+    disk_write: u64,
     uptime: u64,
     process_count: usize,
+    processes: Vec<ProcInfo>,
+}
+
+#[derive(Serialize, Clone)]
+struct GpuStats {
+    name: String,
+    usage: f32,
+    temp: f32,
+    mem_used: u64,
+    mem_total: u64,
+    power: f32,
+    fan: f32,
 }
 
 #[derive(Serialize, Clone)]
 struct AppEntry {
     name: String,
+    process: String,
+    memory: u64,
+}
+
+#[derive(Serialize, Clone)]
+struct BenchResult {
+    single: u64,
+    multi: u64,
+    threads: usize,
+}
+
+#[derive(Serialize, Clone)]
+struct PingResult {
+    target: String,
+    host: String,
+    avg: Option<f64>,
+    min: Option<f64>,
+    max: Option<f64>,
+    jitter: Option<f64>,
+    loss: u32,
 }
 
 // --- FONCTIONS UTILITAIRES ---
 
-fn get_gpu_name() -> String {
-    // AJOUT DU FLAG ICI
-    let output = Command::new("wmic")
+fn powershell(script: &str) -> Option<String> {
+    // Force l'UTF-8 sinon les accents (périphériques, titres de fenêtres) sont cassés
+    let script = format!("[Console]::OutputEncoding=[Text.Encoding]::UTF8; {script}");
+    let out = Command::new("powershell")
         .creation_flags(CREATE_NO_WINDOW)
-        .args(&["path", "win32_videocontroller", "get", "name"])
-        .output();
-
-    match output {
-        Ok(o) => {
-            let raw_output = String::from_utf8_lossy(&o.stdout);
-            let mut best_gpu = "GPU Inconnu".to_string();
-            let mut found_dedicated = false;
-
-            for line in raw_output.lines().skip(1) { 
-                let name = line.trim();
-                if name.is_empty() { continue; }
-
-                let name_upper = name.to_uppercase();
-
-                if name_upper.contains("VIRTUAL") || name_upper.contains("PARSEC") || name_upper.contains("CITRIX") || name_upper.contains("REMOTE") || name_upper.contains("RDP") {
-                    continue;
-                }
-
-                if name_upper.contains("NVIDIA") || name_upper.contains("AMD") || name_upper.contains("RTX") || name_upper.contains("GTX") || name_upper.contains("RADEON") {
-                    best_gpu = name.to_string();
-                    found_dedicated = true;
-                    break; 
-                }
-
-                if !found_dedicated {
-                    best_gpu = name.to_string();
-                }
-            }
-            best_gpu
-        },
-        Err(_) => "Erreur détection GPU".to_string(),
-    }
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .output()
+        .ok()?;
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-fn get_connected_peripherals() -> Vec<Peripheral> {
-    let mut periphs = Vec::new();
-    
-    let script = "Get-PnpDevice -Class 'Monitor','AudioEndpoint','Keyboard','PointingDevice','Camera' -Status 'OK' | Select-Object FriendlyName, Class";
-    
-    // AJOUT DU FLAG ICI
-    let output = Command::new("powershell")
-        .creation_flags(CREATE_NO_WINDOW)
-        .args(&["-NoProfile", "-Command", script])
-        .output();
+fn query_hardware() -> serde_json::Value {
+    // wmic n'existe plus sur les Windows 11 récents : on passe par CIM
+    let script = r#"
+$gpus = @(Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, VideoModeDescription)
+$board = Get-CimInstance Win32_BaseBoard | Select-Object Manufacturer, Product
+$bios = Get-CimInstance Win32_BIOS | Select-Object Manufacturer, SMBIOSBIOSVersion
+$ram = @(Get-CimInstance Win32_PhysicalMemory | Select-Object Capacity, Speed, Manufacturer, PartNumber)
+$per = @(Get-PnpDevice -Class Monitor,AudioEndpoint,Keyboard,Mouse,Camera,Image,Bluetooth -PresentOnly -Status OK -ErrorAction SilentlyContinue | Select-Object FriendlyName, Class)
+@{ gpus = $gpus; board = $board; bios = $bios; ram = $ram; peripherals = $per } | ConvertTo-Json -Depth 3 -Compress
+"#;
+    powershell(script)
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or(serde_json::Value::Null)
+}
 
-    if let Ok(o) = output {
-        let txt = String::from_utf8_lossy(&o.stdout);
-        for line in txt.lines().skip(2) {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() > 1 {
-                let kind = parts.last().unwrap().to_string();
-                let name = parts[..parts.len()-1].join(" ");
-                
-                let n_low = name.to_lowercase();
-                if !name.is_empty() 
-                   && !n_low.contains("composite") 
-                   && !n_low.contains("root hub") 
-                   && !n_low.contains("print") 
-                   && !n_low.contains("virtual") {
-                    periphs.push(Peripheral { name, kind });
-                }
+fn parse_f32(s: &str) -> f32 {
+    s.trim().parse().unwrap_or(-1.0)
+}
+
+// shortcut: stats GPU live uniquement via nvidia-smi (NVIDIA), ajouter ADL/perf counters pour AMD/Intel si besoin
+fn query_nvidia() -> Option<GpuStats> {
+    let out = Command::new("nvidia-smi")
+        .creation_flags(CREATE_NO_WINDOW)
+        .args([
+            "--query-gpu=name,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,fan.speed",
+            "--format=csv,noheader,nounits",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let txt = String::from_utf8_lossy(&out.stdout);
+    let f: Vec<&str> = txt.lines().next()?.split(',').collect();
+    if f.len() < 7 {
+        return None;
+    }
+    Some(GpuStats {
+        name: f[0].trim().to_string(),
+        usage: parse_f32(f[1]),
+        temp: parse_f32(f[2]),
+        mem_used: f[3].trim().parse::<u64>().unwrap_or(0) * 1024 * 1024,
+        mem_total: f[4].trim().parse::<u64>().unwrap_or(0) * 1024 * 1024,
+        power: parse_f32(f[5]),
+        fan: parse_f32(f[6]),
+    })
+}
+
+fn count_primes(limit: u32) -> u32 {
+    let mut count = 0;
+    for i in 2..limit {
+        let mut is_prime = true;
+        let mut j = 2;
+        while j * j <= i {
+            if i % j == 0 {
+                is_prime = false;
+                break;
             }
+            j += 1;
+        }
+        if is_prime {
+            count += 1;
         }
     }
-    periphs
+    count
+}
+
+fn ping_target(target: &str, host: &str) -> PingResult {
+    const SAMPLES: u32 = 5;
+    let addr = host.parse().unwrap();
+    let mut times = Vec::new();
+    for _ in 0..SAMPLES {
+        let start = Instant::now();
+        if TcpStream::connect_timeout(&addr, Duration::from_secs(2)).is_ok() {
+            times.push(start.elapsed().as_secs_f64() * 1000.0);
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    let loss = (SAMPLES - times.len() as u32) * 100 / SAMPLES;
+    if times.is_empty() {
+        return PingResult { target: target.into(), host: host.into(), avg: None, min: None, max: None, jitter: None, loss };
+    }
+    let avg = times.iter().sum::<f64>() / times.len() as f64;
+    let jitter = times.windows(2).map(|w| (w[1] - w[0]).abs()).sum::<f64>() / (times.len().max(2) - 1) as f64;
+    PingResult {
+        target: target.into(),
+        host: host.into(),
+        avg: Some(avg),
+        min: times.iter().cloned().reduce(f64::min),
+        max: times.iter().cloned().reduce(f64::max),
+        jitter: Some(jitter),
+        loss,
+    }
 }
 
 // --- COMMANDES TAURI ---
 
 #[tauri::command]
-fn get_static_specs() -> PcSpecs {
-    let mut sys = System::new_all();
-    let disks_list = Disks::new_with_refreshed_list();
-    sys.refresh_all();
+async fn get_static_specs() -> PcSpecs {
+    tauri::async_runtime::spawn_blocking(|| {
+        let mut sys = System::new_all();
+        sys.refresh_all();
+        let disks = Disks::new_with_refreshed_list()
+            .iter()
+            .map(|d| DiskInfo {
+                name: d.name().to_string_lossy().to_string(),
+                mount: d.mount_point().to_string_lossy().to_string(),
+                total_space: d.total_space(),
+                available_space: d.available_space(),
+                kind: format!("{:?}", d.kind()),
+                fs: d.file_system().to_string_lossy().to_string(),
+            })
+            .collect();
 
-    let mut my_disks = Vec::new();
-    for disk in &disks_list {
-        my_disks.push(DiskInfo {
-            name: disk.name().to_string_lossy().to_string(),
-            total_space: disk.total_space(),
-            available_space: disk.available_space(),
-            kind: format!("{:?}", disk.kind()),
-        });
-    }
-
-    PcSpecs {
-        os: System::name().unwrap_or("Windows".to_string()) + " " + &System::os_version().unwrap_or_default(),
-        host_name: System::host_name().unwrap_or("User-PC".to_string()),
-        cpu_brand: sys.cpus().first().map(|cpu| cpu.brand().to_string()).unwrap_or("Unknown CPU".to_string()),
-        cpu_cores: sys.physical_core_count().unwrap_or(0),
-        total_memory: sys.total_memory(),
-        gpu_name: get_gpu_name(), 
-        disks: my_disks,
-        peripherals: get_connected_peripherals(),
-    }
-}
-
-#[tauri::command]
-async fn run_benchmark() -> u64 {
-    let start = Instant::now();
-    let mut count = 0;
-    for i in 2..200_000 {
-        let mut is_prime = true;
-        for j in 2..((i as f64).sqrt() as i32 + 1) {
-            if i % j == 0 { is_prime = false; break; }
+        PcSpecs {
+            os: System::long_os_version().unwrap_or_else(|| "Windows".into()),
+            kernel: System::kernel_version().unwrap_or_default(),
+            host_name: System::host_name().unwrap_or_else(|| "User-PC".into()),
+            cpu_brand: sys.cpus().first().map(|c| c.brand().trim().to_string()).unwrap_or_else(|| "Unknown CPU".into()),
+            cpu_arch: System::cpu_arch().unwrap_or_default(),
+            cpu_cores: sys.physical_core_count().unwrap_or(0),
+            cpu_threads: sys.cpus().len(),
+            cpu_freq: sys.cpus().first().map(|c| c.frequency()).unwrap_or(0),
+            total_memory: sys.total_memory(),
+            disks,
+            hardware: query_hardware(),
         }
-        if is_prime { count += 1; }
-    }
-    let duration = start.elapsed();
-    let ms = duration.as_millis() as u64;
-    if ms == 0 { return 10000; }
-    10_000_000 / ms
+    })
+    .await
+    .expect("specs thread panicked")
 }
 
 #[tauri::command]
-async fn test_connection() -> String {
-    let start = Instant::now();
-    match TcpStream::connect_timeout(&"8.8.8.8:53".parse().unwrap(), Duration::from_secs(2)) {
-        Ok(_) => format!("{} ms", start.elapsed().as_millis()),
-        Err(_) => "Offline".to_string(),
+async fn run_benchmark() -> BenchResult {
+    const LIMIT: u32 = 200_000;
+    tauri::async_runtime::spawn_blocking(|| {
+        let score = |ms: u128| 10_000_000 / ms.max(1) as u64;
+
+        let start = Instant::now();
+        count_primes(LIMIT);
+        let single = score(start.elapsed().as_millis());
+
+        let threads = thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+        let start = Instant::now();
+        let handles: Vec<_> = (0..threads).map(|_| thread::spawn(|| count_primes(LIMIT))).collect();
+        for h in handles {
+            let _ = h.join();
+        }
+        let multi = score(start.elapsed().as_millis()) * threads as u64;
+
+        BenchResult { single, multi, threads }
+    })
+    .await
+    .expect("benchmark thread panicked")
+}
+
+#[tauri::command]
+async fn test_connection() -> Vec<PingResult> {
+    let targets = [("Google", "8.8.8.8:53"), ("Cloudflare", "1.1.1.1:53"), ("Quad9", "9.9.9.9:53")];
+    let handles: Vec<_> = targets
+        .iter()
+        .map(|&(t, h)| tauri::async_runtime::spawn_blocking(move || ping_target(t, h)))
+        .collect();
+    let mut results = Vec::new();
+    for h in handles {
+        if let Ok(r) = h.await {
+            results.push(r);
+        }
     }
+    results
 }
 
 #[tauri::command]
 async fn get_recent_apps() -> Vec<AppEntry> {
-    let script = "Get-Process | Where-Object {$_.MainWindowTitle -ne \"\"} | Sort-Object StartTime -Descending | Select-Object -First 5 -ExpandProperty MainWindowTitle";
-    
-    // AJOUT DU FLAG ICI AUSSI
-    let output = Command::new("powershell")
-        .creation_flags(CREATE_NO_WINDOW)
-        .args(&["-NoProfile", "-Command", script])
-        .output();
-
-    let mut apps = Vec::new();
-    if let Ok(o) = output {
-        let txt = String::from_utf8_lossy(&o.stdout);
-        for line in txt.lines() {
-            let name = line.trim().to_string();
-            if !name.is_empty() { apps.push(AppEntry { name }); }
+    // StartTime est inaccessible pour les processus élevés : on trie sans planter
+    let script = r#"@(Get-Process | Where-Object { $_.MainWindowTitle -ne '' } | Sort-Object { try { $_.StartTime } catch { [datetime]::MinValue } } -Descending | Select-Object -First 9 @{n='name';e={$_.MainWindowTitle}}, @{n='process';e={$_.ProcessName}}, @{n='memory';e={[int64]$_.WorkingSet64}}) | ConvertTo-Json -Compress"#;
+    tauri::async_runtime::spawn_blocking(move || {
+        #[derive(serde::Deserialize)]
+        struct Raw {
+            name: String,
+            process: String,
+            memory: u64,
         }
+        let raw = powershell(script).unwrap_or_default();
+        // ConvertTo-Json renvoie un objet seul (pas un tableau) quand il n'y a qu'une fenêtre
+        serde_json::from_str::<Vec<Raw>>(&raw)
+            .or_else(|_| serde_json::from_str::<Raw>(&raw).map(|r| vec![r]))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|r| AppEntry { name: r.name, process: r.process, memory: r.memory })
+            .collect()
+    })
+    .await
+    .unwrap_or_default()
+}
+
+#[tauri::command]
+fn kill_process(pid: u32) -> Result<(), String> {
+    if pid <= 4 || pid == std::process::id() {
+        return Err("Processus protégé".into());
     }
-    apps
+    let mut sys = System::new();
+    let pid = Pid::from_u32(pid);
+    sys.refresh_process(pid);
+    match sys.process(pid) {
+        Some(p) if p.kill() => Ok(()),
+        Some(_) => Err("Accès refusé".into()),
+        None => Err("Processus introuvable".into()),
+    }
+}
+
+// --- BOUCLES DE MONITORING ---
+
+fn spawn_monitor(app: AppHandle) {
+    thread::spawn(move || {
+        let mut sys = System::new_all();
+        let mut networks = Networks::new_with_refreshed_list();
+        let threads = sys.cpus().len().max(1) as f32;
+        let (mut total_down, mut total_up) = (0u64, 0u64);
+
+        loop {
+            sys.refresh_cpu();
+            sys.refresh_memory();
+            sys.refresh_processes();
+            networks.refresh();
+
+            let (mut down, mut up) = (0, 0);
+            for (_, data) in &networks {
+                down += data.received();
+                up += data.transmitted();
+            }
+            total_down += down;
+            total_up += up;
+
+            let (mut disk_read, mut disk_write) = (0, 0);
+            let mut processes: Vec<ProcInfo> = sys
+                .processes()
+                .iter()
+                .map(|(pid, p)| {
+                    let du = p.disk_usage();
+                    disk_read += du.read_bytes;
+                    disk_write += du.written_bytes;
+                    ProcInfo {
+                        pid: pid.as_u32(),
+                        name: p.name().to_string(),
+                        // sysinfo donne un % par cœur (jusqu'à 100 * threads)
+                        cpu: p.cpu_usage() / threads,
+                        memory: p.memory(),
+                    }
+                })
+                .filter(|p| p.pid != 0)
+                .collect();
+            processes.sort_by(|a, b| b.cpu.total_cmp(&a.cpu).then(b.memory.cmp(&a.memory)));
+            processes.truncate(TOP_PROCESSES);
+
+            let cpu_usage = sys.global_cpu_info().cpu_usage();
+            let data = RealTimeData {
+                cpu_usage,
+                cpu_cores: sys.cpus().iter().map(|c| c.cpu_usage()).collect(),
+                cpu_freq: sys.cpus().iter().map(|c| c.frequency()).max().unwrap_or(0),
+                ram_used: sys.used_memory(),
+                ram_total: sys.total_memory(),
+                swap_used: sys.used_swap(),
+                swap_total: sys.total_swap(),
+                net_down: down,
+                net_up: up,
+                net_total_down: total_down,
+                net_total_up: total_up,
+                disk_read,
+                disk_write,
+                uptime: System::uptime(),
+                process_count: sys.processes().len(),
+                processes,
+            };
+
+            if let Some(tray) = app.tray_by_id("main") {
+                let ram = sys.used_memory() as f64 / sys.total_memory().max(1) as f64 * 100.0;
+                let _ = tray.set_tooltip(Some(format!("Geewer's Control Room\nCPU {cpu_usage:.0}% · RAM {ram:.0}%")));
+            }
+            let _ = app.emit("system-update", data);
+            thread::sleep(Duration::from_secs(1));
+        }
+    });
+}
+
+fn spawn_gpu_monitor(app: AppHandle) {
+    thread::spawn(move || loop {
+        match query_nvidia() {
+            Some(stats) => {
+                let _ = app.emit("gpu-update", stats);
+                thread::sleep(Duration::from_secs(1));
+            }
+            // Pas de GPU NVIDIA : inutile de relancer le processus en boucle
+            None => return,
+        }
+    });
+}
+
+fn show_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
 }
 
 fn main() {
@@ -215,48 +438,53 @@ fn main() {
                 let _ = window.maximize();
             }
 
-            let app_handle = app.handle().clone();
-            
-            thread::spawn(move || {
-                let mut sys = System::new_all();
-                let mut networks = Networks::new_with_refreshed_list();
-                
-                loop {
-                    sys.refresh_cpu();
-                    sys.refresh_memory();
-                    sys.refresh_processes();
-                    networks.refresh(); 
-
-                    let mut total_down = 0;
-                    let mut total_up = 0;
-                    for (_interface_name, data) in &networks {
-                        total_down += data.received();
-                        total_up += data.transmitted();
+            let show = MenuItem::with_id(app, "show", "Ouvrir / Open", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quitter / Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &quit])?;
+            TrayIconBuilder::with_id("main")
+                .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("Geewer's Control Room")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => show_main(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                        show_main(tray.app_handle());
                     }
-                    
-                    let data = RealTimeData {
-                        cpu_usage: sys.global_cpu_info().cpu_usage(),
-                        ram_used: sys.used_memory(),
-                        ram_total: sys.total_memory(),
-                        swap_used: sys.used_swap(),
-                        net_down: total_down,
-                        net_up: total_up,
-                        uptime: System::uptime(),
-                        process_count: sys.processes().len(),
-                    };
+                })
+                .build(app)?;
 
-                    let _ = app_handle.emit("system-update", data);
-                    thread::sleep(Duration::from_secs(1));
-                }
-            });
+            spawn_monitor(app.handle().clone());
+            spawn_gpu_monitor(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            get_static_specs, 
-            run_benchmark, 
+            get_static_specs,
+            run_benchmark,
             test_connection,
-            get_recent_apps
+            get_recent_apps,
+            kill_process
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn primes_below_100() {
+        assert_eq!(count_primes(100), 25);
+    }
+
+    #[test]
+    fn protected_pids_cannot_be_killed() {
+        assert!(kill_process(4).is_err());
+        assert!(kill_process(std::process::id()).is_err());
+    }
 }
