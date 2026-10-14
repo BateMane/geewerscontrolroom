@@ -259,20 +259,24 @@ async fn get_static_specs() -> PcSpecs {
 #[tauri::command]
 async fn run_benchmark() -> BenchResult {
     const LIMIT: u32 = 200_000;
+    // Une passe ne dure que ~35 ms en release : on répète pour un score stable
+    const REPS: u64 = 10;
     tauri::async_runtime::spawn_blocking(|| {
-        let score = |ms: u128| 10_000_000 / ms.max(1) as u64;
+        let work = || (0..REPS).map(|_| count_primes(LIMIT)).sum::<u32>();
+        // Même échelle que l'ancien score (10 000 000 / ms par passe), en microsecondes pour la précision
+        let score = |us: u128| (10_000_000_000 * REPS as u128 / us.max(1)) as u64;
 
         let start = Instant::now();
-        count_primes(LIMIT);
-        let single = score(start.elapsed().as_millis());
+        work();
+        let single = score(start.elapsed().as_micros());
 
         let threads = thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
         let start = Instant::now();
-        let handles: Vec<_> = (0..threads).map(|_| thread::spawn(|| count_primes(LIMIT))).collect();
+        let handles: Vec<_> = (0..threads).map(|_| thread::spawn(work)).collect();
         for h in handles {
             let _ = h.join();
         }
-        let multi = score(start.elapsed().as_millis()) * threads as u64;
+        let multi = score(start.elapsed().as_micros()) * threads as u64;
 
         BenchResult { single, multi, threads }
     })
@@ -345,6 +349,8 @@ fn spawn_monitor(app: AppHandle) {
         let (mut total_down, mut total_up) = (0u64, 0u64);
 
         loop {
+            // Attendre avant la mesure : le 1er échantillon CPU juste après new_all() est faux (pic à 100 %)
+            thread::sleep(Duration::from_secs(1));
             sys.refresh_cpu();
             sys.refresh_memory();
             sys.refresh_processes();
@@ -404,7 +410,6 @@ fn spawn_monitor(app: AppHandle) {
                 let _ = tray.set_tooltip(Some(format!("Geewer's Control Room\nCPU {cpu_usage:.0}% · RAM {ram:.0}%")));
             }
             let _ = app.emit("system-update", data);
-            thread::sleep(Duration::from_secs(1));
         }
     });
 }
