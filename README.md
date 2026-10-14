@@ -1,6 +1,6 @@
-# Geewer's Control Room 1.0.4
+# Geewer's Control Room 1.1.0
 
-![Version](https://img.shields.io/badge/version-1.0.4-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.1.0-blue?style=flat-square)
 ![Tauri](https://img.shields.io/badge/Tauri-2.0-orange?style=flat-square&logo=tauri)
 ![Svelte](https://img.shields.io/badge/Svelte-red?style=flat-square&logo=svelte)
 ![Platform](https://img.shields.io/badge/platform-Windows-blueviolet?style=flat-square&logo=windows)
@@ -17,16 +17,16 @@ C'est léger, ça ne bouffe pas tes FPS, et c'est codé avec **Tauri (Rust)** po
 
 ## 🇫🇷 Fonctionnalités
 
-L'idée est de rassembler tout ce qu'il faut savoir sur ta machine au même endroit :
-
-* **Tableau de Bord Temps Réel** : Surveille la charge CPU, l'utilisation de la RAM, le Swap et surtout ton débit réseau actuel (Upload/Download) à la seconde près.
-* **Santé du PC** : Une note globale sur 100 calculée en direct pour savoir si ton système est en souffrance.
-* **Outils Intégrés** :
-    * 🚀 **Dernières Activités** : Vois quelles applications tu as lancées récemment (avec icônes intelligentes).
-    * 🧪 **Benchmark CPU** : Teste la puissance brute de ton processeur avec un calcul intensif.
-    * 🌐 **Test Latence** : Un ping rapide vers Google pour vérifier si ta connexion lag.
-* **Specs Détaillées** : Détection intelligente de ta "vraie" carte graphique (ignore les drivers virtuels), liste de tes disques avec barres d'espace, et tri de tes périphériques (Écrans, Audio, Claviers...).
-* **C'est ton interface** : Change la couleur d'accentuation, le fond des cartes et le thème global pour matcher ton setup.
+* **Tableau de Bord Temps Réel** : jauges CPU / RAM / GPU, historique sur 60 s, charge par cœur, débit réseau et activité disque à la seconde.
+* **GPU en direct** (NVIDIA) : charge, température, VRAM, consommation et ventilateur.
+* **Santé du PC** : note sur 100 + alertes visuelles quand le CPU, la RAM ou la température GPU dépassent tes seuils.
+* **Gestionnaire de Processus** : top 60 des processus, recherche, tri, et bouton « Terminer » avec confirmation.
+* **Matériel détaillé** : CPU, vraie carte graphique (ignore les adaptateurs virtuels), barrettes RAM, carte mère, BIOS, disques et périphériques. Copie du rapport complet en un clic.
+* **Outils** :
+    * 🧪 **Benchmark CPU** mono et multi-cœur, avec historique et record.
+    * 🌐 **Test Réseau** vers Google, Cloudflare et Quad9 : latence, gigue et pertes.
+* **Barre des tâches** : icône avec CPU/RAM au survol, option pour réduire l'app au lieu de la fermer.
+* **C'est ton interface** : 12 thèmes + personnalisation complète des couleurs, FR/EN, raccourcis clavier (1-4, Échap).
 
 ---
 
@@ -74,14 +74,14 @@ Tired of the ugly Task Manager? This app provides a sleek, Cyberpunk-inspired in
 
 ### ⚡ What can it do?
 
-* **Real-time Dashboard:** Monitor CPU, RAM, Swap, and Network bandwidth (Up/Down) live.
-* **System Health:** A live global score out of 100 based on system load.
-* **Built-in Tools:**
-    * 🚀 **Recent Activities:** Tracks recently opened applications (with smart icons).
-    * 🧪 **CPU Benchmark:** Test your processor's raw power.
-    * 🌐 **Latency Test:** Quick ping to check your internet stability.
-* **Advanced Specs:** Smart GPU detection, Drive storage visualization, and organized Peripheral list (Monitors, Audio, Inputs...).
-* **Customization:** Fully themeable interface.
+* **Real-time Dashboard:** CPU / RAM / GPU gauges, 60 s history, per-core load, network and disk throughput.
+* **Live GPU stats** (NVIDIA): load, temperature, VRAM, power and fan.
+* **System Health:** a live score out of 100 plus alerts with configurable thresholds.
+* **Process Manager:** top 60 processes, search, sort, end task with confirmation.
+* **Advanced Specs:** CPU, real GPU, RAM modules, motherboard, BIOS, drives and peripherals, one-click report copy.
+* **Tools:** single and multi-core CPU benchmark with history, network test (latency, jitter, loss) against 3 DNS servers.
+* **Tray icon** with live stats and optional minimize-to-tray.
+* **Customization:** 12 themes, full color control, FR/EN, keyboard shortcuts.
 
 ### 🛠️ Installation
 
